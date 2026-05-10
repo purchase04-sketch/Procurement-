@@ -138,6 +138,9 @@ router.post('/upload/inventoryplanning', upload.single('file'), async (req, res)
       uploadedBy: 'Admin'
     });
 
+    const m = req.body.month || new Date().toISOString().slice(0, 7);
+    await recalculateAll(m);
+
     res.json({ success: true, module: 'inventoryplanning', rows: rows.length, processed });
   } catch (err) {
     console.error('Inventory Planning upload error:', err);
