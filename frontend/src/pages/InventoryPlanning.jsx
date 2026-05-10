@@ -63,41 +63,61 @@ const InventoryPlanning = () => {
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
                 <th>Item Details</th>
-                <th>Consumption (LY)</th>
-                <th>Stock Status</th>
+                <th>LY Consumption</th>
+                <th>Seasonality</th>
+                <th>Forecast Qty</th>
+                <th>Current Stock</th>
+                <th>Safety Stock</th>
                 <th>Net Req.</th>
                 <th>Suggested Order</th>
-                <th>Supplier Allocation</th>
-                <th>Risk Status</th>
+                <th>Supplier Alloc. / Rate / Val / Lead</th>
+                <th>Risk / Alerts</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '100px', color: 'var(--text-dim)' }}>Calculating planning data...</td></tr>
+                <tr><td colSpan="10" style={{ textAlign: 'center', padding: '100px', color: 'var(--text-dim)' }}>Calculating planning data...</td></tr>
               ) : data.map((item, i) => (
                 <tr key={i}>
                   <td>
-                    <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>{item.itemCode}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{item.itemName}</div>
+                    <div style={{ fontWeight: '600', fontSize: '0.85rem' }}>{item.itemCode}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>{item.itemName}</div>
                   </td>
-                  <td style={{ fontSize: '0.9rem' }}>{item.forecastQty}</td>
+                  <td>{item.forecastQty}</td>
                   <td>
-                    <div style={{ fontSize: '0.85rem' }}>{item.currentStock} / <span style={{ color: 'var(--text-dim)' }}>{item.safetyStock} (SS)</span></div>
-                    <div style={{ width: '100px', height: '4px', background: 'var(--bg-input)', borderRadius: '2px', marginTop: '6px', overflow: 'hidden' }}>
-                       <div style={{ width: `${Math.min(100, (item.currentStock/item.safetyStock)*50)}%`, height: '100%', background: item.currentStock < item.safetyStock ? 'var(--danger)' : 'var(--success)' }}></div>
-                    </div>
+                    <select style={{ background: 'var(--bg-input)', border: 'none', color: '#fff', fontSize: '0.75rem', padding: '2px 4px' }}>
+                      <option>Auto (1.0)</option>
+                      <option>Manual</option>
+                    </select>
                   </td>
-                  <td style={{ fontSize: '0.9rem', fontWeight: '600' }}>{item.netRequirement}</td>
-                  <td style={{ fontSize: '0.9rem', color: 'var(--primary)', fontWeight: '700' }}>{item.suggestedOrderQty}</td>
+                  <td style={{ fontWeight: '600' }}>{item.forecastQty}</td>
+                  <td>{item.currentStock}</td>
+                  <td>{item.safetyStock}</td>
+                  <td style={{ fontWeight: '600' }}>{item.netRequirement}</td>
+                  <td style={{ color: 'var(--primary)', fontWeight: '700' }}>{item.suggestedOrderQty}</td>
                   <td>
                     {item.allocations?.map((a, j) => (
-                      <div key={j} style={{ fontSize: '0.7rem', display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '2px' }}>
-                        <span>{a.supplierCode}</span>
-                        <span style={{ color: 'var(--text-muted)' }}>{a.percentage}% ({a.allocatedQty})</span>
+                      <div key={j} style={{ fontSize: '0.65rem', display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.02)', padding: '4px', borderRadius: '4px', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontWeight: '600' }}>{a.supplierCode}</span>
+                          <span>{a.percentage}% ({a.allocatedQty})</span>
+                        </div>
+                        <div style={{ color: 'var(--text-dim)', display: 'flex', gap: '8px' }}>
+                          <span>Rate: ₹{a.rate}</span>
+                          <span>Val: ₹{a.value.toLocaleString()}</span>
+                          <span>LD: {a.leadDays}d</span>
+                        </div>
                       </div>
                     ))}
                   </td>
-                  <td><RiskBadge level={item.risk} /></td>
+                  <td>
+                    <RiskBadge level={item.risk} />
+                    <div style={{ fontSize: '0.65rem', marginTop: '4px', color: 'var(--text-dim)' }}>
+                      {item.currentStock < item.safetyStock && <div style={{ color: 'var(--danger)' }}>Stockout Risk</div>}
+                      {item.currentStock > item.safetyStock * 5 && <div style={{ color: 'var(--warning)' }}>Excess Risk</div>}
+                      <div style={{ fontStyle: 'italic', color: 'var(--primary)' }}>Auto-Recomm.</div>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {!loading && data.length === 0 && (
