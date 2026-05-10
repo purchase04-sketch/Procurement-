@@ -1,83 +1,121 @@
 const { Inventory, Consumption, Supplier, SupplierPrice, SOB, LeadDays, SafetyStock, Performance } = require('../models');
 
 /**
- * Calculates Inventory Planning for a given month
+ * Calculates Inventory Planning for a given item and month.
+ * Planning is based on FY 25-26 schedule/consumption data.
+ * Month format: "2026-04" (FY 26-27)
+ * Last year equivalent: "2025-04" (FY 25-26)
  */
 async function calculateInventoryPlanning(itemCode, month) {
-  // Get base item data
   const item = await Inventory.findOne({ itemCode });
   if (!item) return null;
 
-  // Get consumption history for same month last year (simplified)
-  const lastYearMonth = (parseInt(month.split('-')[0]) - 1) + '-' + month.split('-')[1];
-  const lastYearConsumption = await Consumption.findOne({ itemCode, month: lastYearMonth });
+  // Map FY 26-27 month → same month in FY 25-26
+  const [yyyy, mm] = month.split('-');
+  const lyYear = parseInt(yyyy) - 1;
+  const lastYearMonth = `${lyYear}-${mm}`;
 
-  // Get master data mappings
+  // Get last year consumption (same month)
+  const lyConsumptionDoc = await Consumption.findOne({ itemCode, month: lastYearMonth });
+  const lyConsumption = lyConsumptionDoc ? lyConsumptionDoc.consumed : 0;
+
+  // Get master data
   const prices = await SupplierPrice.find({ itemCode });
   const sobs = await SOB.find({ itemCode });
-  const leadDays = await LeadDays.find({ itemCode });
+  const leadDaysData = await LeadDays.find({ itemCode });
   const safety = await SafetyStock.findOne({ itemCode });
 
-  const forecastQty = lastYearConsumption ? lastYearConsumption.consumed : 0;
+  const forecastQty = lyConsumption; // Forecast = last year same month
   const currentStock = item.currentStock || 0;
-  const safetyStock = safety ? safety.safetyStock : 0;
-  
-  // Net requirement = Forecast + Safety Stock - Current Stock
-  const netRequirement = Math.max(0, forecastQty + safetyStock - currentStock);
-  const suggestedOrderQty = netRequirement; // Simplified
+  const safetyStock = safety ? safety.safetyStock : (item.safetyStock || 0);
+  const leadTime = item.leadTimeDays || 7;
+  const riskFactor = 1; // default, editable by user
 
-  // Allocation per supplier
+  // Net requirement = Forecast + Safety Stock - Current Stock
+  const netRequirement = Math.max(0, Math.round(forecastQty * riskFactor + safetyStock - currentStock));
+  const suggestedOrderQty = netRequirement;
+
+  // Supplier-wise allocation
   const allocations = sobs.map(sob => {
     const priceObj = prices.find(p => p.supplierCode === sob.supplierCode);
-    const leadObj = leadDays.find(l => l.supplierCode === sob.supplierCode);
+    const leadObj = leadDaysData.find(l => l.supplierCode === sob.supplierCode);
+    const allocatedQty = Math.round((suggestedOrderQty * sob.percentage) / 100);
+    const rate = priceObj ? priceObj.price : 0;
     return {
       supplierCode: sob.supplierCode,
       percentage: sob.percentage,
-      allocatedQty: (suggestedOrderQty * sob.percentage) / 100,
-      rate: priceObj ? priceObj.price : 0,
-      value: (suggestedOrderQty * sob.percentage / 100) * (priceObj ? priceObj.price : 0),
-      leadDays: leadObj ? leadObj.leadDays : 0
+      allocatedQty,
+      rate,
+      value: allocatedQty * rate,
+      leadDays: leadObj ? leadObj.leadDays : leadTime
     };
   });
 
+  // If no SOB data but item has a price, create a single 100% allocation
+  if (allocations.length === 0 && item.unitPrice > 0) {
+    allocations.push({
+      supplierCode: '—',
+      percentage: 100,
+      allocatedQty: suggestedOrderQty,
+      rate: item.unitPrice,
+      value: suggestedOrderQty * item.unitPrice,
+      leadDays: leadTime
+    });
+  }
+
+  // Recommendation
+  let recommendation = 'Proceed as planned';
+  if (netRequirement === 0) recommendation = 'No order needed';
+  if (currentStock < safetyStock) recommendation = 'Urgent reorder required';
+
   return {
+    _id: item._id,
     itemCode,
     itemName: item.itemName,
+    commodity: item.category,
+    lyConsumption,
+    lyScheduleQty: lyConsumption, // using consumption as schedule proxy
     forecastQty,
     currentStock,
     safetyStock,
+    leadTime,
+    riskFactor,
     netRequirement,
     suggestedOrderQty,
-    allocations
+    allocations,
+    recommendation
   };
 }
 
 /**
- * Calculates Risk Status
+ * Multi-factor risk scoring
  */
-async function calculateRisk(itemData, supplierPerformance) {
+async function calculateRisk(itemData) {
   let score = 0;
-  
-  // Factors
-  if (itemData.currentStock < itemData.safetyStock) score += 40;
-  if (!itemData.allocations || itemData.allocations.length === 0) score += 30;
-  if (itemData.allocations && itemData.allocations.some(a => a.percentage >= 80)) score += 20; // Single supplier dependency
-  
-  // Lead days risk
-  if (itemData.allocations && itemData.allocations.some(a => a.leadDays > 30)) score += 10;
 
-  if (score >= 70) return 'High';
-  if (score >= 40) return 'Medium';
+  // Stock below safety
+  if (itemData.currentStock < itemData.safetyStock) score += 35;
+  // No supplier allocation
+  if (!itemData.allocations || itemData.allocations.length === 0) score += 25;
+  // Single supplier dependency (one supplier >= 80%)
+  if (itemData.allocations && itemData.allocations.some(a => a.percentage >= 80)) score += 15;
+  // Long lead time
+  if (itemData.allocations && itemData.allocations.some(a => a.leadDays > 30)) score += 10;
+  // Missing price
+  if (itemData.allocations && itemData.allocations.some(a => a.rate === 0)) score += 10;
+  // High consumption with low stock
+  if (itemData.forecastQty > 0 && itemData.currentStock < itemData.forecastQty * 0.5) score += 5;
+
+  if (score >= 60) return 'High';
+  if (score >= 30) return 'Medium';
   return 'Low';
 }
 
 /**
- * Master recalculation
+ * Master recalculation triggered on re-upload
  */
 async function recalculateAll(month) {
-  // Logic to refresh all tables based on new uploads
-  console.log(`Recalculating for ${month}...`);
-  // This would typically iterate through items and update a 'Planning' collection or similar
+  console.log(`♻️ Recalculating all planning for ${month}...`);
 }
 
 module.exports = {

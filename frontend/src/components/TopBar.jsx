@@ -17,18 +17,18 @@ const TopBar = ({ onRefresh }) => {
         } else {
           // Fallback static months if master is empty
           const fallback = [
-            { label: 'Apr 2026', val: '2026-04' },
+            { label: 'April 2026', val: '2026-04' },
             { label: 'May 2026', val: '2026-05' },
-            { label: 'Jun 2026', val: '2026-06' },
-            { label: 'Jul 2026', val: '2026-07' },
-            { label: 'Aug 2026', val: '2026-08' },
-            { label: 'Sep 2026', val: '2026-09' },
-            { label: 'Oct 2026', val: '2026-10' },
-            { label: 'Nov 2026', val: '2026-11' },
-            { label: 'Dec 2026', val: '2026-12' },
-            { label: 'Jan 2027', val: '2027-01' },
-            { label: 'Feb 2027', val: '2027-02' },
-            { label: 'Mar 2027', val: '2027-03' },
+            { label: 'June 2026', val: '2026-06' },
+            { label: 'July 2026', val: '2026-07' },
+            { label: 'August 2026', val: '2026-08' },
+            { label: 'September 2026', val: '2026-09' },
+            { label: 'October 2026', val: '2026-10' },
+            { label: 'November 2026', val: '2026-11' },
+            { label: 'December 2026', val: '2026-12' },
+            { label: 'January 2027', val: '2027-01' },
+            { label: 'February 2027', val: '2027-02' },
+            { label: 'March 2027', val: '2027-03' },
           ];
           setMonths(fallback);
           setSelectedMonth('2026-04');
@@ -36,9 +36,18 @@ const TopBar = ({ onRefresh }) => {
       })
       .catch(() => {
          const fallback = [
-          { label: 'Apr 2026', val: '2026-04' },
+          { label: 'April 2026', val: '2026-04' },
           { label: 'May 2026', val: '2026-05' },
-          { label: 'Jun 2026', val: '2026-06' },
+          { label: 'June 2026', val: '2026-06' },
+          { label: 'July 2026', val: '2026-07' },
+          { label: 'August 2026', val: '2026-08' },
+          { label: 'September 2026', val: '2026-09' },
+          { label: 'October 2026', val: '2026-10' },
+          { label: 'November 2026', val: '2026-11' },
+          { label: 'December 2026', val: '2026-12' },
+          { label: 'January 2027', val: '2027-01' },
+          { label: 'February 2027', val: '2027-02' },
+          { label: 'March 2027', val: '2027-03' },
         ];
         setMonths(fallback);
         setSelectedMonth('2026-04');

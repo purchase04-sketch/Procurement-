@@ -22,13 +22,9 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => res.sendFile(path.join(__dirname, '..', 'client', 'dist', 'index.html')));
 }
 
-/* ── MongoDB connection ── */
+/* ── Start server first, then connect MongoDB ── */
+app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log('✅ MongoDB connected successfully');
-    app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
-  })
-  .catch(err => {
-    console.error('❌ MongoDB connection error:', err.message);
-    process.exit(1);
-  });
+  .then(() => console.log('✅ MongoDB connected successfully'))
+  .catch(err => console.error('❌ MongoDB connection error:', err.message));

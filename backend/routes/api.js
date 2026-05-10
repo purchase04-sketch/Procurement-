@@ -24,6 +24,123 @@ const upload = multer({ storage, fileFilter: (req, file, cb) => {
 }});
 
 /* ══════════════════════════════════════════
+   INVENTORY PLANNING — Single Sheet Upload
+   Reads one Excel with all data and maps it
+   ══════════════════════════════════════════ */
+router.post('/upload/inventoryplanning', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const workbook = XLSX.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+
+    if (!rows.length) return res.status(400).json({ error: 'Empty sheet' });
+
+    let processed = 0;
+
+    for (const row of rows) {
+      // Normalize keys to camelCase
+      const doc = {};
+      Object.entries(row).forEach(([k, v]) => {
+        const camel = k.replace(/[^a-zA-Z0-9]/g, ' ').trim().split(/\s+/).map((w, i) =>
+          i === 0 ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+        ).join('');
+        doc[camel] = v;
+      });
+
+      const itemCode = doc.itemCode || doc.item || doc.code || '';
+      const supplierCode = doc.supplierCode || doc.supplier || '';
+      if (!itemCode) continue;
+
+      // 1. Upsert Inventory (item master)
+      await Inventory.findOneAndUpdate(
+        { itemCode },
+        {
+          itemCode,
+          itemName: doc.itemName || doc.description || doc.name || '',
+          category: doc.commodity || doc.category || 'General',
+          currentStock: Number(doc.currentStock || doc.stock || 0),
+          safetyStock: Number(doc.safetyStock || 0),
+          leadTimeDays: Number(doc.leadTime || doc.leadDays || 7),
+          unitPrice: Number(doc.price || doc.supplierPrice || doc.rate || 0),
+        },
+        { upsert: true }
+      );
+
+      // 2. Upsert Supplier Price
+      if (supplierCode) {
+        await SupplierPrice.findOneAndUpdate(
+          { itemCode, supplierCode },
+          { itemCode, supplierCode, price: Number(doc.price || doc.supplierPrice || doc.rate || 0) },
+          { upsert: true }
+        );
+      }
+
+      // 3. Upsert Share of Business
+      if (supplierCode && doc.sob != null && doc.sob !== '') {
+        await SOB.findOneAndUpdate(
+          { itemCode, supplierCode },
+          { itemCode, supplierCode, percentage: Number(doc.sob || doc.shareOfBusiness || 0) },
+          { upsert: true }
+        );
+      }
+
+      // 4. Upsert Lead Days
+      if (supplierCode) {
+        await LeadDays.findOneAndUpdate(
+          { itemCode, supplierCode },
+          { itemCode, supplierCode, leadDays: Number(doc.leadTime || doc.leadDays || 0) },
+          { upsert: true }
+        );
+      }
+
+      // 5. Upsert Safety Stock
+      await SafetyStock.findOneAndUpdate(
+        { itemCode },
+        { itemCode, safetyStock: Number(doc.safetyStock || 0) },
+        { upsert: true }
+      );
+
+      // 6. Upsert monthly consumption for each FY 25-26 month found in columns
+      const monthCols = {
+        apr: '2025-04', may: '2025-05', jun: '2025-06', jul: '2025-07',
+        aug: '2025-08', sep: '2025-09', oct: '2025-10', nov: '2025-11',
+        dec: '2025-12', jan: '2026-01', feb: '2026-02', mar: '2026-03'
+      };
+      for (const [prefix, monthVal] of Object.entries(monthCols)) {
+        // Look for columns like apr25, apr_consumption, aprConsumption, etc.
+        const consumed = Number(
+          doc[`${prefix}25`] || doc[`${prefix}26`] || doc[`${prefix}Consumption`] ||
+          doc[`${prefix}Schedule`] || doc[`${prefix}Qty`] || doc[prefix] || 0
+        );
+        if (consumed > 0) {
+          await Consumption.findOneAndUpdate(
+            { itemCode, month: monthVal },
+            { itemCode, month: monthVal, year: parseInt(monthVal.split('-')[0]), consumed },
+            { upsert: true }
+          );
+        }
+      }
+
+      processed++;
+    }
+
+    // Audit log
+    await UploadHistory.create({
+      moduleName: 'inventoryplanning',
+      fileName: req.file.originalname,
+      uploadedBy: 'Admin'
+    });
+
+    res.json({ success: true, module: 'inventoryplanning', rows: rows.length, processed });
+  } catch (err) {
+    console.error('Inventory Planning upload error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ══════════════════════════════════════════
    EXCEL UPLOAD — parse sheets & upsert
    ══════════════════════════════════════════ */
 router.post('/upload/:module', upload.single('file'), async (req, res) => {
@@ -46,7 +163,7 @@ router.post('/upload/:module', upload.single('file'), async (req, res) => {
       deliveries:   { Model: Delivery,       key: 'deliveryId' },
       activities:   { Model: Activity,       key: null },
       commodity:    { Model: Commodity,      key: 'commodityCode' },
-      prices:       { Model: SupplierPrice,  key: null }, // composite itemCode + supplierCode
+      prices:       { Model: SupplierPrice,  key: null },
       sob:          { Model: SOB,            key: null },
       leaddays:     { Model: LeadDays,       key: null },
       safetystock:  { Model: SafetyStock,    key: 'itemCode' },
@@ -60,7 +177,6 @@ router.post('/upload/:module', upload.single('file'), async (req, res) => {
     if (!cfg) return res.status(400).json({ error: `Unknown module: ${module}` });
 
     for (const row of rows) {
-      // normalise column headers → camelCase
       const doc = {};
       Object.entries(row).forEach(([k, v]) => {
         const camel = k.replace(/[^a-zA-Z0-9]/g, ' ').trim().split(/\s+/).map((w, i) =>
@@ -75,9 +191,8 @@ router.post('/upload/:module', upload.single('file'), async (req, res) => {
         result.updated++;
       } else if (['prices', 'sob', 'leaddays', 'performance'].includes(module)) {
         const filter = { itemCode: doc.itemCode, supplierCode: doc.supplierCode };
-        if (module === 'performance') delete filter.itemCode; // performance is supplier + month
+        if (module === 'performance') delete filter.itemCode;
         if (module === 'performance') filter.month = doc.month;
-        
         await cfg.Model.findOneAndUpdate(filter, doc, { upsert: true });
         result.updated++;
       } else if (cfg.key) {
@@ -90,14 +205,12 @@ router.post('/upload/:module', upload.single('file'), async (req, res) => {
       }
     }
 
-    // Audit log
     await UploadHistory.create({
       moduleName: module,
       fileName: req.file.originalname,
       uploadedBy: 'Admin'
     });
 
-    // Trigger recalculation if month is present in first row
     if (rows[0] && (rows[0].month || rows[0].Month)) {
       const m = rows[0].month || rows[0].Month;
       await recalculateAll(m);
