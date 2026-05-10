@@ -1,60 +1,78 @@
-import { LayoutDashboard, Package, DollarSign, Truck, Database, ShoppingCart } from 'lucide-react';
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+import { 
+  LayoutDashboard, 
+  Database, 
+  Box, 
+  TrendingUp, 
+  DollarSign, 
+  Award, 
+  Calendar, 
+  Download,
+  Package
+} from 'lucide-react';
 
-const navItems = [
-  { key: 'dashboard',  label: 'Dashboard',          icon: LayoutDashboard },
-  { key: 'inventory',  label: 'Inventory Planning',  icon: Package },
-  { key: 'orders',     label: 'Purchase Orders',     icon: ShoppingCart },
-  { key: 'savings',    label: 'Cost Savings',        icon: DollarSign },
-  { key: 'suppliers',  label: 'Supplier Performance', icon: Truck },
-  { key: 'datahub',    label: 'Data Sources',        icon: Database },
-];
+const Sidebar = () => {
+  const menuItems = [
+    { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/' },
+    { name: 'Data Sources', icon: <Database size={20} />, path: '/data-sources' },
+    { name: 'Inventory Master', icon: <Package size={20} />, path: '/inventory-master' },
+    { name: 'Inventory Planning', icon: <Box size={20} />, path: '/inventory-planning' },
+    { name: 'Cost Savings', icon: <DollarSign size={20} />, path: '/cost-savings' },
+    { name: 'Supplier Performance', icon: <Award size={20} />, path: '/supplier-performance' },
+    { name: 'Monthly Schedule', icon: <Calendar size={20} />, path: '/monthly-schedule' },
+    { name: 'Reports', icon: <Download size={20} />, path: '/reports' },
+  ];
 
-export default function Sidebar({ active, onNavigate }) {
   return (
-    <aside className="w-[260px] min-w-[260px] h-full flex flex-col border-r border-white/[0.07] bg-[#0c0e16]">
-      {/* Logo */}
-      <div className="px-6 py-6 mb-2">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">🌱</span>
-          <span className="text-xl font-extrabold bg-gradient-to-r from-white to-blue-400 bg-clip-text text-transparent" style={{ fontFamily: 'Outfit' }}>
-            ProcureSmart AI
-          </span>
-        </div>
-        <p className="text-[0.65rem] text-gray-500 mt-1 ml-10">Enterprise Procurement Hub</p>
+    <aside style={{ width: '280px', background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '30px 24px' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: '800', background: 'linear-gradient(135deg, #fff, #3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          ANTIGRAVITY
+        </h1>
+        <p style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px', letterSpacing: '2px', textTransform: 'uppercase' }}>
+          Procurement System
+        </p>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 flex flex-col gap-1 px-3">
-        {navItems.map(item => {
-          const Icon = item.icon;
-          const isActive = active === item.key;
-          return (
-            <button
-              key={item.key}
-              onClick={() => onNavigate(item.key)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer text-left
-                ${isActive
-                  ? 'bg-blue-500/15 text-blue-400 shadow-lg shadow-blue-500/5'
-                  : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
-                }`}
-            >
-              <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} />
-              {item.label}
-            </button>
-          );
-        })}
+      <nav style={{ flex: 1, padding: '10px 16px' }}>
+        {menuItems.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            style={({ isActive }) => ({
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-md)',
+              textDecoration: 'none',
+              color: isActive ? '#fff' : 'var(--text-muted)',
+              background: isActive ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+              marginBottom: '4px',
+              transition: 'all 0.2s',
+              border: isActive ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid transparent'
+            })}
+          >
+            <span style={{ display: 'flex' }}>{item.icon}</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>{item.name}</span>
+          </NavLink>
+        ))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-5 py-5 border-t border-white/[0.07]">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">SA</div>
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-gray-200">Solution Architect</span>
-            <span className="text-[0.65rem] text-gray-500">Enterprise Admin</span>
+      <div style={{ padding: '20px', borderTop: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '0.8rem' }}>
+            AD
+          </div>
+          <div>
+            <div style={{ fontSize: '0.8rem', fontWeight: '600' }}>Admin User</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Procurement Dept.</div>
           </div>
         </div>
       </div>
     </aside>
   );
-}
+};
+
+export default Sidebar;

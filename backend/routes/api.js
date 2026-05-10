@@ -2,7 +2,13 @@ const express = require('express');
 const multer  = require('multer');
 const XLSX    = require('xlsx');
 const path    = require('path');
-const { Inventory, Consumption, Supplier, PurchaseOrder, CostSaving, Delivery, Activity } = require('../models');
+const { 
+  Inventory, Consumption, Supplier, PurchaseOrder, CostSaving, Delivery, Activity,
+  Commodity, SupplierPrice, SOB, LeadDays, SafetyStock, CostSavingData, Performance, 
+  Schedule, PlanningMonth, UploadHistory, Mapping 
+} = require('../models');
+const { calculateInventoryPlanning, calculateRisk, recalculateAll } = require('../services/calculationEngine');
+const { sendSupplierReminder, generatePendingItemsEmail } = require('../services/mailService');
 
 const router = express.Router();
 
@@ -33,12 +39,21 @@ router.post('/upload/:module', upload.single('file'), async (req, res) => {
 
     const modelMap = {
       inventory:    { Model: Inventory,     key: 'itemCode' },
-      consumption:  { Model: Consumption,   key: null },   // composite key
+      consumption:  { Model: Consumption,   key: null },
       suppliers:    { Model: Supplier,       key: 'supplierCode' },
       orders:       { Model: PurchaseOrder,  key: 'poNumber' },
       savings:      { Model: CostSaving,     key: 'savingId' },
       deliveries:   { Model: Delivery,       key: 'deliveryId' },
       activities:   { Model: Activity,       key: null },
+      commodity:    { Model: Commodity,      key: 'commodityCode' },
+      prices:       { Model: SupplierPrice,  key: null }, // composite itemCode + supplierCode
+      sob:          { Model: SOB,            key: null },
+      leaddays:     { Model: LeadDays,       key: null },
+      safetystock:  { Model: SafetyStock,    key: 'itemCode' },
+      savingdata:   { Model: CostSavingData, key: null },
+      performance:  { Model: Performance,    key: null },
+      schedule:     { Model: Schedule,       key: null },
+      planningmonth:{ Model: PlanningMonth,  key: 'month' },
     };
 
     const cfg = modelMap[module];
@@ -56,18 +71,36 @@ router.post('/upload/:module', upload.single('file'), async (req, res) => {
 
       if (module === 'consumption') {
         const filter = { itemCode: doc.itemCode, month: doc.month };
-        const existing = await Consumption.findOne(filter);
-        if (existing) { await Consumption.updateOne(filter, { $set: doc }); result.updated++; }
-        else { await Consumption.create(doc); result.inserted++; }
-      } else if (module === 'activities') {
-        await Activity.create(doc);
-        result.inserted++;
-      } else {
+        await Consumption.findOneAndUpdate(filter, doc, { upsert: true });
+        result.updated++;
+      } else if (['prices', 'sob', 'leaddays', 'performance'].includes(module)) {
+        const filter = { itemCode: doc.itemCode, supplierCode: doc.supplierCode };
+        if (module === 'performance') delete filter.itemCode; // performance is supplier + month
+        if (module === 'performance') filter.month = doc.month;
+        
+        await cfg.Model.findOneAndUpdate(filter, doc, { upsert: true });
+        result.updated++;
+      } else if (cfg.key) {
         const filter = { [cfg.key]: doc[cfg.key] };
-        const existing = await cfg.Model.findOne(filter);
-        if (existing) { await cfg.Model.updateOne(filter, { $set: doc }); result.updated++; }
-        else { await cfg.Model.create(doc); result.inserted++; }
+        await cfg.Model.findOneAndUpdate(filter, doc, { upsert: true });
+        result.updated++;
+      } else {
+        await cfg.Model.create(doc);
+        result.inserted++;
       }
+    }
+
+    // Audit log
+    await UploadHistory.create({
+      moduleName: module,
+      fileName: req.file.originalname,
+      uploadedBy: 'Admin'
+    });
+
+    // Trigger recalculation if month is present in first row
+    if (rows[0] && (rows[0].month || rows[0].Month)) {
+      const m = rows[0].month || rows[0].Month;
+      await recalculateAll(m);
     }
 
     res.json({ success: true, module, rows: rows.length, ...result });
@@ -88,6 +121,17 @@ const modules = {
   deliveries:  Delivery,
   activities:  Activity,
   consumption: Consumption,
+  commodity:   Commodity,
+  prices:      SupplierPrice,
+  sob:         SOB,
+  leaddays:    LeadDays,
+  safetystock: SafetyStock,
+  savingdata:  CostSavingData,
+  performance: Performance,
+  schedule:    Schedule,
+  planningmonth: PlanningMonth,
+  history:     UploadHistory,
+  mapping:     Mapping
 };
 
 Object.entries(modules).forEach(([route, Model]) => {
@@ -266,6 +310,51 @@ router.get('/dashboard/inventory-forecast', async (req, res) => {
       });
     }
 
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ══════════════════════════════════════════
+   INVENTORY PLANNING & SCHEDULE
+   ══════════════════════════════════════════ */
+
+router.get('/planning/inventory', async (req, res) => {
+  try {
+    const { month } = req.query;
+    const items = await Inventory.find().lean();
+    const results = [];
+
+    for (const item of items) {
+      const plan = await calculateInventoryPlanning(item.itemCode, month);
+      if (plan) {
+        const risk = await calculateRisk(plan);
+        results.push({ ...plan, risk });
+      }
+    }
+    res.json(results);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/schedule/mail-preview', async (req, res) => {
+  try {
+    const { supplierCode, month } = req.body;
+    const pendingItems = await Schedule.find({ supplierCode, month, pendingQty: { $gt: 0 } }).lean();
+    const supplier = await Supplier.findOne({ supplierCode });
+    
+    if (!pendingItems.length) return res.status(404).json({ error: 'No pending items found' });
+    
+    const html = generatePendingItemsEmail(supplier.supplierName, pendingItems);
+    res.json({ html });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/schedule/mail-send', async (req, res) => {
+  try {
+    const { supplierCode, month } = req.body;
+    const pendingItems = await Schedule.find({ supplierCode, month, pendingQty: { $gt: 0 } }).lean();
+    const supplier = await Supplier.findOne({ supplierCode });
+    
+    const result = await sendSupplierReminder(supplier.email, supplier.supplierName, pendingItems);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

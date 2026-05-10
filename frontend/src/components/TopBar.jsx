@@ -1,52 +1,97 @@
-import { RefreshCw, Search } from 'lucide-react';
-import { useAppContext } from '../App';
+import React, { useState, useEffect } from 'react';
+import { Search, Bell, RefreshCw, ChevronDown } from 'lucide-react';
+import axios from 'axios';
 
-export default function TopBar() {
-  const { selectedMonth, setSelectedMonth, triggerRefresh } = useAppContext();
+const TopBar = ({ onRefresh }) => {
+  const [months, setMonths] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState('');
 
-  const months = [];
-  const now = new Date();
-  for (let i = -3; i <= 2; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    months.push({ val, label: i === 0 ? `${label} (Current)` : i > 0 ? `${label} (Projection)` : label });
-  }
+  useEffect(() => {
+    // Fetch months from master
+    axios.get('http://localhost:5000/api/planningmonth')
+      .then(res => {
+        if (res.data.length > 0) {
+          setMonths(res.data);
+          const active = res.data.find(m => m.active);
+          setSelectedMonth(active ? active.val : res.data[0].val);
+        } else {
+          // Fallback static months if master is empty
+          const fallback = [
+            { label: 'Apr 2026', val: '2026-04' },
+            { label: 'May 2026', val: '2026-05' },
+            { label: 'Jun 2026', val: '2026-06' },
+            { label: 'Jul 2026', val: '2026-07' },
+            { label: 'Aug 2026', val: '2026-08' },
+            { label: 'Sep 2026', val: '2026-09' },
+            { label: 'Oct 2026', val: '2026-10' },
+            { label: 'Nov 2026', val: '2026-11' },
+            { label: 'Dec 2026', val: '2026-12' },
+            { label: 'Jan 2027', val: '2027-01' },
+            { label: 'Feb 2027', val: '2027-02' },
+            { label: 'Mar 2027', val: '2027-03' },
+          ];
+          setMonths(fallback);
+          setSelectedMonth('2026-04');
+        }
+      })
+      .catch(() => {
+         const fallback = [
+          { label: 'Apr 2026', val: '2026-04' },
+          { label: 'May 2026', val: '2026-05' },
+          { label: 'Jun 2026', val: '2026-06' },
+        ];
+        setMonths(fallback);
+        setSelectedMonth('2026-04');
+      });
+  }, []);
 
   return (
-    <header className="h-[68px] min-h-[68px] flex items-center justify-between px-6 border-b border-white/[0.07] bg-[#060810]/80 backdrop-blur-md sticky top-0 z-20">
-      {/* Search */}
-      <div className="flex items-center gap-2 bg-white/[0.03] border border-white/[0.07] rounded-xl px-4 py-2.5 w-[380px]">
-        <Search size={16} className="text-gray-500" />
-        <input
-          type="text"
-          placeholder="Search items, suppliers, orders..."
-          className="bg-transparent border-none outline-none text-sm text-gray-200 w-full placeholder:text-gray-600"
-        />
+    <header style={{ height: '70px', padding: '0 30px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', background: 'rgba(10, 11, 16, 0.8)', backdropFilter: 'blur(10px)', sticky: 'top', zIndex: 100 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1 }}>
+        <div style={{ position: 'relative', width: '400px' }}>
+          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+          <input 
+            type="text" 
+            placeholder="Search items, suppliers, reports..." 
+            className="input-field" 
+            style={{ width: '100%', paddingLeft: '40px', background: 'var(--bg-input)' }} 
+          />
+        </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-5">
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500">Planning Month:</label>
-          <select
+      <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: '600', textTransform: 'uppercase' }}>Planning Month:</span>
+          <select 
             value={selectedMonth}
-            onChange={e => setSelectedMonth(e.target.value)}
-            className="bg-white/[0.04] border border-white/[0.08] text-gray-200 text-sm px-3 py-1.5 rounded-lg outline-none cursor-pointer"
+            onChange={(e) => {
+              setSelectedMonth(e.target.value);
+              localStorage.setItem('activeMonth', e.target.value);
+              window.dispatchEvent(new Event('storage')); // Trigger update across tabs/components
+            }}
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: '#fff', borderRadius: 'var(--radius-md)', padding: '6px 12px', outline: 'none', cursor: 'pointer' }}
           >
             {months.map(m => (
-              <option key={m.val} value={m.val} className="bg-gray-900">{m.label}</option>
+              <option key={m.val} value={m.val} style={{ background: '#111' }}>{m.label || m.month}</option>
             ))}
           </select>
         </div>
 
-        <button
-          onClick={triggerRefresh}
-          className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all duration-200 cursor-pointer"
+        <button 
+          onClick={onRefresh}
+          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
         >
-          <RefreshCw size={15} /> Refresh
+          <RefreshCw size={18} />
+          <span style={{ fontSize: '0.8rem' }}>Refresh Data</span>
         </button>
+
+        <div style={{ position: 'relative', cursor: 'pointer' }}>
+          <Bell size={20} color="var(--text-muted)" />
+          <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '8px', height: '8px', background: 'var(--danger)', borderRadius: '50%', border: '2px solid var(--bg-main)' }}></div>
+        </div>
       </div>
     </header>
   );
-}
+};
+
+export default TopBar;

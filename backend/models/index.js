@@ -115,6 +115,106 @@ const activitySchema = new mongoose.Schema({
   month:       { type: String, default: '' },
 }, { timestamps: true });
 
+/* ── Commodity Master ── */
+const commoditySchema = new mongoose.Schema({
+  commodityCode: { type: String, required: true, unique: true },
+  commodityName: { type: String, required: true },
+  category:      { type: String, default: 'General' },
+}, { timestamps: true });
+
+/* ── Supplier Price ── */
+const supplierPriceSchema = new mongoose.Schema({
+  itemCode:     { type: String, required: true },
+  supplierCode: { type: String, required: true },
+  price:        { type: Number, default: 0 },
+  currency:     { type: String, default: 'INR' },
+}, { timestamps: true });
+supplierPriceSchema.index({ itemCode: 1, supplierCode: 1 }, { unique: true });
+
+/* ── Share of Business ── */
+const sobSchema = new mongoose.Schema({
+  itemCode:     { type: String, required: true },
+  supplierCode: { type: String, required: true },
+  percentage:   { type: Number, default: 0 },
+}, { timestamps: true });
+sobSchema.index({ itemCode: 1, supplierCode: 1 }, { unique: true });
+
+/* ── Lead Days ── */
+const leadDaysSchema = new mongoose.Schema({
+  itemCode:     { type: String, required: true },
+  supplierCode: { type: String, required: true },
+  leadDays:     { type: Number, default: 0 },
+}, { timestamps: true });
+leadDaysSchema.index({ itemCode: 1, supplierCode: 1 }, { unique: true });
+
+/* ── Safety Stock Master ── */
+const safetyStockSchema = new mongoose.Schema({
+  itemCode:    { type: String, required: true, unique: true },
+  safetyStock: { type: Number, default: 0 },
+}, { timestamps: true });
+
+/* ── Extended Cost Saving Data ── */
+const costSavingDataSchema = new mongoose.Schema({
+  itemCode:     { type: String },
+  supplierCode: { type: String },
+  month:        { type: String, required: true },
+  targetSaving: { type: Number, default: 0 },
+  actualSaving: { type: Number, default: 0 },
+  savingType:   { type: String }, // Negotiation, Alternate, etc.
+  annualized:   { type: Number, default: 0 },
+}, { timestamps: true });
+
+/* ── Supplier Performance ── */
+const performanceSchema = new mongoose.Schema({
+  supplierCode: { type: String, required: true },
+  month:        { type: String, required: true },
+  otdPercentage:{ type: Number, default: 0 },
+  delayDays:    { type: Number, default: 0 },
+  qualityRejection: { type: Number, default: 0 },
+  complianceStatus: { type: String },
+  riskScore:    { type: Number, default: 0 },
+  ranking:      { type: Number },
+}, { timestamps: true });
+performanceSchema.index({ supplierCode: 1, month: 1 }, { unique: true });
+
+/* ── Monthly Schedule Supply ── */
+const scheduleSchema = new mongoose.Schema({
+  month:         { type: String, required: true },
+  supplierCode:  { type: String, required: true },
+  supplierName:  { type: String },
+  commodity:     { type: String },
+  itemCode:      { type: String, required: true },
+  itemName:      { type: String },
+  plannedQty:    { type: Number, default: 0 },
+  requiredDate:  { type: Date },
+  scheduleQty:   { type: Number, default: 0 },
+  pendingQty:    { type: Number, default: 0 },
+  dispatchStatus:{ type: String, default: 'Pending' },
+  remarks:       { type: String },
+  riskStatus:    { type: String, default: 'Low' },
+}, { timestamps: true });
+
+/* ── Planning Month Master ── */
+const planningMonthSchema = new mongoose.Schema({
+  month: { type: String, required: true, unique: true }, // "Apr 2026", "May 2026", etc.
+  val:   { type: String, required: true, unique: true }, // "2026-04"
+  active:{ type: Boolean, default: false },
+}, { timestamps: true });
+
+/* ── Upload History ── */
+const uploadHistorySchema = new mongoose.Schema({
+  date:       { type: Date, default: Date.now },
+  moduleName: { type: String, required: true },
+  fileName:   { type: String, required: true },
+  uploadedBy: { type: String, default: 'Admin' },
+}, { timestamps: true });
+
+/* ── Data Source Mapping ── */
+const mappingSchema = new mongoose.Schema({
+  moduleName: { type: String, required: true, unique: true },
+  mappings:   { type: Map, of: String }, // Excel Column Name -> Model Field Name
+}, { timestamps: true });
+
 module.exports = {
   Inventory:     mongoose.model('Inventory', inventorySchema),
   Consumption:   mongoose.model('Consumption', consumptionSchema),
@@ -123,4 +223,15 @@ module.exports = {
   CostSaving:    mongoose.model('CostSaving', costSavingSchema),
   Delivery:      mongoose.model('Delivery', deliverySchema),
   Activity:      mongoose.model('Activity', activitySchema),
+  Commodity:     mongoose.model('Commodity', commoditySchema),
+  SupplierPrice: mongoose.model('SupplierPrice', supplierPriceSchema),
+  SOB:           mongoose.model('SOB', sobSchema),
+  LeadDays:      mongoose.model('LeadDays', leadDaysSchema),
+  SafetyStock:   mongoose.model('SafetyStock', safetyStockSchema),
+  CostSavingData:mongoose.model('CostSavingData', costSavingDataSchema),
+  Performance:   mongoose.model('Performance', performanceSchema),
+  Schedule:      mongoose.model('Schedule', scheduleSchema),
+  PlanningMonth: mongoose.model('PlanningMonth', planningMonthSchema),
+  UploadHistory: mongoose.model('UploadHistory', uploadHistorySchema),
+  Mapping:       mongoose.model('Mapping', mappingSchema),
 };
