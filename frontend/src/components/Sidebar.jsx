@@ -15,12 +15,12 @@ import {
 const Sidebar = () => {
   const menuItems = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/' },
-    { name: 'Data Sources', icon: <Database size={20} />, path: '/data-sources' },
     { name: 'Inventory Master', icon: <Package size={20} />, path: '/inventory-master' },
     { name: 'Inventory Planning', icon: <Box size={20} />, path: '/inventory-planning' },
     { name: 'Cost Savings', icon: <DollarSign size={20} />, path: '/cost-savings' },
     { name: 'Supplier Performance', icon: <Award size={20} />, path: '/supplier-performance' },
     { name: 'Monthly Schedule', icon: <Calendar size={20} />, path: '/monthly-schedule' },
+    { name: 'Data Sources', icon: <Database size={20} />, path: '/data-sources' },
     { name: 'Reports', icon: <Download size={20} />, path: '/reports' },
   ];
 
