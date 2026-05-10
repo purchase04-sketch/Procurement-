@@ -25,15 +25,15 @@ if (process.env.NODE_ENV === 'production') {
 /* ── Start server immediately ── */
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
 
-/* ── MongoDB — connect with extended timeouts ── */
+/* ── MongoDB — connect with extended timeouts and disabled buffering ── */
 mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 30000,
+  serverSelectionTimeoutMS: 15000, // Reduced from 30s to fail faster if disconnected
   socketTimeoutMS: 45000,
-  connectTimeoutMS: 30000,
-  bufferCommands: true,
+  connectTimeoutMS: 15000,
+  bufferCommands: false, // CRITICAL FIX: Disable buffering so it fails immediately instead of timing out after 10000ms
 })
   .then(() => console.log('✅ MongoDB connected successfully'))
   .catch(err => {
     console.error('❌ MongoDB connection error:', err.message);
-    console.log('⚠️  Server running without database — uploads will fail until MongoDB connects');
+    console.log('⚠️  Server running without database — uploads will fail instantly until MongoDB connects');
   });

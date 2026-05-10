@@ -1,7 +1,8 @@
-const express = require('express');
-const multer  = require('multer');
-const XLSX    = require('xlsx');
-const path    = require('path');
+const express  = require('express');
+const multer   = require('multer');
+const XLSX     = require('xlsx');
+const path     = require('path');
+const mongoose = require('mongoose');
 const { 
   Inventory, Consumption, Supplier, PurchaseOrder, CostSaving, Delivery, Activity,
   Commodity, SupplierPrice, SOB, LeadDays, SafetyStock, CostSavingData, Performance, 
@@ -29,6 +30,10 @@ const upload = multer({ storage, fileFilter: (req, file, cb) => {
    ══════════════════════════════════════════ */
 router.post('/upload/inventoryplanning', upload.single('file'), async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'Database connection is not ready. Please check MongoDB status.' });
+    }
+
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     const workbook = XLSX.readFile(req.file.path);
@@ -145,6 +150,10 @@ router.post('/upload/inventoryplanning', upload.single('file'), async (req, res)
    ══════════════════════════════════════════ */
 router.post('/upload/:module', upload.single('file'), async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'Database connection is not ready. Please check MongoDB status.' });
+    }
+
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     const workbook = XLSX.readFile(req.file.path);

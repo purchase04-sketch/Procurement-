@@ -6,6 +6,7 @@ const DataSourceCard = ({ title, description, module, onUploadSuccess }) => {
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState(null);
   const [msg, setMsg] = useState('');
+  const [progress, setProgress] = useState(0);
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -16,22 +17,40 @@ const DataSourceCard = ({ title, description, module, onUploadSuccess }) => {
 
     setUploading(true);
     setStatus(null);
+    setProgress(0);
+
+    // Simulate progress while uploading and parsing
+    const progressInterval = setInterval(() => {
+      setProgress(p => Math.min(p + 15, 90));
+    }, 500);
 
     try {
-      const res = await axios.post(`http://localhost:5000/api/upload/${module}`, formData);
+      const res = await axios.post(`http://localhost:5000/api/upload/${module}`, formData, {
+        timeout: 60000 // 60s timeout for large files
+      });
+      clearInterval(progressInterval);
+      setProgress(100);
       setStatus('success');
-      setMsg(`${res.data.rows} rows processed`);
+      setMsg(`${res.data.rows} rows processed successfully`);
       if (onUploadSuccess) onUploadSuccess();
     } catch (err) {
+      clearInterval(progressInterval);
+      setProgress(0);
       setStatus('error');
-      setMsg(err.response?.data?.error || 'Upload failed');
+      setMsg(err.response?.data?.error || err.message || 'Upload failed');
     } finally {
-      setUploading(false);
+      setTimeout(() => setUploading(false), 1000);
+      e.target.value = null; // reset input to allow re-uploading same file if needed
     }
   };
 
   return (
-    <div className="glass-card" style={{ padding: '24px' }}>
+    <div className="glass-card" style={{ padding: '24px', position: 'relative', overflow: 'hidden' }}>
+      {/* Progress Bar */}
+      {uploading && (
+        <div style={{ position: 'absolute', top: 0, left: 0, height: '4px', width: `${progress}%`, background: 'var(--success)', transition: 'width 0.3s ease' }} />
+      )}
+      
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
         <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
           <FileText size={24} />
@@ -39,10 +58,10 @@ const DataSourceCard = ({ title, description, module, onUploadSuccess }) => {
         <div style={{ flex: 1 }}>
           <h4 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '4px' }}>{title}</h4>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '12px' }}>{description}</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label className="btn-primary" style={{ padding: '8px 18px', fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <label className="btn-primary" style={{ padding: '8px 18px', fontSize: '0.8rem', cursor: uploading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: uploading ? 0.7 : 1 }}>
               <Upload size={14} />
-              {uploading ? 'Uploading...' : 'Upload Excel / CSV'}
+              {uploading ? `Uploading... ${progress}%` : 'Upload Excel / CSV'}
               <input type="file" hidden onChange={handleFileChange} accept=".xlsx,.xls,.csv" disabled={uploading} />
             </label>
             {status === 'success' && (
@@ -51,7 +70,7 @@ const DataSourceCard = ({ title, description, module, onUploadSuccess }) => {
               </span>
             )}
             {status === 'error' && (
-              <span style={{ fontSize: '0.75rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(239, 68, 68, 0.1)', padding: '4px 8px', borderRadius: '4px' }}>
                 <AlertCircle size={14} /> {msg}
               </span>
             )}
